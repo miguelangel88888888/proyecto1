@@ -1,70 +1,59 @@
 package com.tienda.tienda.controller;
 
 import com.tienda.tienda.model.Producto;
+import com.tienda.tienda.repository.ProductoRepository;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/api/productos")
 public class ProductoController {
 
-    // Lista en memoria: simula la base de datos
-    private final List<Producto> productos = new ArrayList<>();
-    private final AtomicLong contador = new AtomicLong(2);
+    private final ProductoRepository repository;
 
-    public ProductoController() {
-        productos.add(new Producto(1L, "Camiseta", 35000, 20));
-        productos.add(new Producto(2L, "Gorra", 25000, 15));
+    public ProductoController(ProductoRepository repository) {
+        this.repository = repository;
     }
 
-    // GET /api/productos -> listar todos
     @GetMapping
     public List<Producto> listar() {
-        return productos;
+        return repository.findAll();
     }
 
-    // GET /api/productos/{id} -> buscar uno
     @GetMapping("/{id}")
     public ResponseEntity<Producto> buscarPorId(@PathVariable Long id) {
-        return productos.stream()
-                .filter(p -> p.getId().equals(id))
-                .findFirst()
+        return repository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // POST /api/productos -> crear
     @PostMapping
-    public ResponseEntity<Producto> crear(@RequestBody Producto producto) {
-        producto.setId(contador.incrementAndGet());
-        productos.add(producto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(producto);
+    public ResponseEntity<Producto> crear(@Valid @RequestBody Producto producto) {
+        producto.setId(null);
+        return ResponseEntity.status(HttpStatus.CREATED).body(repository.save(producto));
     }
 
-    // PUT /api/productos/{id} -> actualizar
     @PutMapping("/{id}")
-    public ResponseEntity<Producto> actualizar(@PathVariable Long id, @RequestBody Producto datos) {
-        for (Producto p : productos) {
-            if (p.getId().equals(id)) {
-                p.setNombre(datos.getNombre());
-                p.setPrecio(datos.getPrecio());
-                p.setStock(datos.getStock());
-                return ResponseEntity.ok(p);
-            }
-        }
-        return ResponseEntity.notFound().build();
+    public ResponseEntity<Producto> actualizar(@PathVariable Long id, @Valid @RequestBody Producto datos) {
+        return repository.findById(id).map(producto -> {
+            producto.setNombre(datos.getNombre());
+            producto.setDescripcion(datos.getDescripcion());
+            producto.setPrecio(datos.getPrecio());
+            producto.setStock(datos.getStock());
+            return ResponseEntity.ok(repository.save(producto));
+        }).orElse(ResponseEntity.notFound().build());
     }
 
-    // DELETE /api/productos/{id} -> eliminar
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
-        boolean eliminado = productos.removeIf(p -> p.getId().equals(id));
-        return eliminado ? ResponseEntity.noContent().build()
-                         : ResponseEntity.notFound().build();
+        if (!repository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        repository.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 }
